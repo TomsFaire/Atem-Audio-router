@@ -61,7 +61,7 @@ fi
 # ── Install dependencies if needed ───────────────
 if [ ! -d "$SERVER_DIR/node_modules" ]; then
     osascript -e 'display notification "Installing dependencies..." with title "ATEM Audio Router"'
-    cd "$SERVER_DIR" && npm install >> "$LOG_FILE" 2>&1
+    npm install --prefix "$SERVER_DIR" >> "$LOG_FILE" 2>&1
     if [ $? -ne 0 ]; then
         osascript -e 'display alert "Install Failed" message "Could not install dependencies. Check the log at:\n'"$LOG_FILE"'" as critical buttons {"OK"}'
         exit 1
@@ -133,13 +133,15 @@ if [ "$SPLIT_STEREO" = "true" ]; then
 fi
 
 # ── Start the server ─────────────────────────────
-cd "$SERVER_DIR"
+# Use absolute path to server.js instead of cd + relative path
+# (cd can fail under App Translocation when the temp cwd is revoked)
 
 echo "$(date): Starting ATEM Audio Router..." >> "$LOG_FILE"
+echo "  Server dir: $SERVER_DIR" >> "$LOG_FILE"
 echo "  ATEM IP: ${ATEM_IP:-none}" >> "$LOG_FILE"
 echo "  Split Stereo: $SPLIT_STEREO" >> "$LOG_FILE"
 
-node src/server.js $ARGS >> "$LOG_FILE" 2>&1 &
+node "$SERVER_DIR/src/server.js" $ARGS >> "$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 
 # Wait a moment for the server to start
