@@ -127,7 +127,15 @@ export class AtemAudioRouterCore extends EventEmitter {
 			this.connected = true;
 
 			if (this.splitStereo) {
-				await this._splitAllStereoInputs();
+				await this._applySplitStereoDualMono();
+				// Routing table can arrive a moment after connect; retry so output embedders are included
+				setTimeout(() => {
+					if (!this.splitStereo || !this.connected || !this.atem) return;
+					void this._applySplitStereoDualMono().then(() => {
+						this._readFullRoutingState();
+						this.emit("stateUpdate", this.getFullState());
+					});
+				}, 500);
 			}
 
 			this._readFullRoutingState();
@@ -146,7 +154,11 @@ export class AtemAudioRouterCore extends EventEmitter {
 			let shouldUpdate = false;
 
 			for (const p of pathsChanged) {
-				if (p.startsWith("fairlight.audioRouting") || p.startsWith("inputs.")) {
+				if (
+					p.startsWith("fairlight.audioRouting") ||
+					p.startsWith("fairlight.inputs") ||
+					p.startsWith("inputs.")
+				) {
 					shouldUpdate = true;
 					break;
 				}
@@ -228,7 +240,13 @@ export class AtemAudioRouterCore extends EventEmitter {
 		this.emit("disconnected");
 	}
 
-	async _splitAllStereoInputs() {
+	/**
+	 * Set Fairlight strips to DualMono so the routing matrix exposes separate rows/columns
+	 * per mono channel. Covers mixer inputs (mics, SDI in, etc.) and output embedders:
+	 * those are keyed by `audioOutputId` in `fairlight.audioRouting.outputs` and must be
+	 * configured via the same CFIP (Fairlight mixer input) command as input strips.
+	 */
+	async _applySplitStereoDualMono() {
 		if (!this.atem || !this.atem.state || !this.atem.state.fairlight) return;
 
 		const inputs = this.atem.state.fairlight.inputs;
@@ -237,38 +255,56 @@ export class AtemAudioRouterCore extends EventEmitter {
 		const DualMono = Enums.FairlightInputConfiguration.DualMono;
 		let splitCount = 0;
 
-		for (const [inputIndex, input] of Object.entries(inputs)) {
-			if (!input || !input.properties) continue;
+		const trySplitIndex = async (
+			inputIndex: number,
+			props: { supportedConfigurations?: number[]; activeConfiguration?: number } | undefined,
+		) => {
+			if (props?.activeConfiguration === DualMono) return false;
+			if (props?.supportedConfigurations?.length) {
+				const supportsDualMono = (props.supportedConfigurations as number[]).includes(DualMono);
+				if (!supportsDualMono) return false;
+			}
+			try {
+				await this.atem!.setFairlightAudioMixerInputProps(inputIndex, {
+					activeConfiguration: DualMono,
+				});
+				return true;
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				log("ERROR", `Failed to set DualMono on Fairlight strip ${inputIndex}:`, msg);
+				return false;
+			}
+		};
 
-			const props = input.properties;
-			const supportsDualMono =
-				props.supportedConfigurations &&
-				(props.supportedConfigurations as number[]).includes(DualMono);
+		const stripIndices = new Set<number>();
+		for (const k of Object.keys(inputs)) stripIndices.add(Number(k));
 
-			if (supportsDualMono && props.activeConfiguration !== DualMono) {
-				try {
-					await this.atem!.setFairlightAudioMixerInputProps(Number(inputIndex), {
-						activeConfiguration: DualMono,
-					});
-					splitCount++;
-				} catch (err: unknown) {
-					const msg = err instanceof Error ? err.message : String(err);
-					log("ERROR", `Failed to split input ${inputIndex}:`, msg);
-				}
+		const routing = this.atem.state.fairlight.audioRouting;
+		if (routing?.outputs) {
+			for (const out of Object.values(routing.outputs)) {
+				const o = out as { audioOutputId?: number };
+				if (typeof o.audioOutputId === "number") stripIndices.add(o.audioOutputId);
 			}
 		}
 
+		for (const inputIndex of stripIndices) {
+			const props = inputs[inputIndex]?.properties;
+			if (await trySplitIndex(inputIndex, props)) splitCount++;
+		}
+
 		if (splitCount > 0) {
-			log("INFO", `Split ${splitCount} stereo input(s) to dual mono`);
+			log("INFO", `Split ${splitCount} Fairlight strip(s) to dual mono (inputs and/or outputs)`);
 		} else {
-			log("INFO", "No stereo inputs to split (all already dual mono or unsupported)");
+			log("INFO", "No strips to split (all dual mono or unsupported)");
 		}
 	}
 
 	async setSplitStereo(enabled: boolean) {
 		this.splitStereo = enabled;
 		if (enabled && this.connected) {
-			await this._splitAllStereoInputs();
+			await this._applySplitStereoDualMono();
+			this._readFullRoutingState();
+			this.emit("stateUpdate", this.getFullState());
 		}
 	}
 

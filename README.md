@@ -35,7 +35,7 @@ Then open the app normally.
 
 ### Split Stereo
 
-Check **Split Stereo** in the header to automatically split all stereo audio inputs into dual mono channels on connect. This sets every Fairlight input that supports it to `DualMono` configuration, giving you individual control over each channel in the routing matrix.
+Check **Split Stereo** in the header to automatically split stereo **inputs and outputs** into dual mono where the switcher allows it. This sets each relevant Fairlight strip (including SDI/aux **output embedders**, keyed by `audioOutputId` in the routing table) to `DualMono`, so you get separate matrix rows/columns per mono channel and can mix split inputs onto split outputs.
 
 ## HTTP API / External Control
 
