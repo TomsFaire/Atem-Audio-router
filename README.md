@@ -37,6 +37,22 @@ Then open the app normally.
 
 Check **Split Stereo** in the header to automatically split all stereo audio inputs into dual mono channels on connect. This sets every Fairlight input that supports it to `DualMono` configuration, giving you individual control over each channel in the routing matrix.
 
+## HTTP API / External Control
+
+The app runs an HTTP API on port **4000** for integration with Q-SYS, Crestron, or any control system that can make HTTP requests.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/state` | Full routing state |
+| `POST` | `/api/route` | Set a route — `{"outputId": ..., "sourceId": ...}` |
+| `GET` | `/api/presets` | List saved presets |
+| `POST` | `/api/preset/recall` | Recall a preset — `{"name": "..."}` |
+| `POST` | `/api/preset/save` | Save current state — `{"name": "..."}` |
+| `DELETE` | `/api/preset/:name` | Delete a preset |
+| `POST` | `/api/connect` | Connect to ATEM — `{"ip": "..."}` |
+
+See [docs/http-api.md](docs/http-api.md) for full documentation with Q-SYS Lua examples and curl commands.
+
 ## Architecture
 
 The app is built with [Electrobun](https://github.com/blackboardsh/electrobun) — a lightweight desktop framework using the Bun runtime and system webview. The entire application bundles to ~17MB.

@@ -163,4 +163,125 @@ const mainWindow = new BrowserWindow({
 	},
 });
 
+// ── HTTP API for external control (Q-SYS, etc.) ──
+
+const API_PORT = Number(Bun.env.API_PORT) || 4000;
+
+function jsonResponse(data: unknown, status = 200) {
+	return new Response(JSON.stringify(data), {
+		status,
+		headers: {
+			"Content-Type": "application/json",
+			"Access-Control-Allow-Origin": "*",
+			"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+			"Access-Control-Allow-Headers": "Content-Type",
+		},
+	});
+}
+
+function errorResponse(message: string, status = 400) {
+	return jsonResponse({ success: false, error: message }, status);
+}
+
+Bun.serve({
+	port: API_PORT,
+	async fetch(req) {
+		const url = new URL(req.url);
+		const path = url.pathname;
+
+		// CORS preflight
+		if (req.method === "OPTIONS") {
+			return jsonResponse(null, 204);
+		}
+
+		// GET /api/state — full routing state
+		if (req.method === "GET" && path === "/api/state") {
+			return jsonResponse(core.getFullState());
+		}
+
+		// POST /api/route — set a route
+		if (req.method === "POST" && path === "/api/route") {
+			try {
+				const body = await req.json() as { outputId?: number; sourceId?: number };
+				if (body.outputId == null || body.sourceId == null) {
+					return errorResponse("outputId and sourceId are required");
+				}
+				await core.setRoute(body.outputId, body.sourceId);
+				return jsonResponse({ success: true });
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return errorResponse(msg, 500);
+			}
+		}
+
+		// GET /api/presets — list presets
+		if (req.method === "GET" && path === "/api/presets") {
+			return jsonResponse(core.listPresets());
+		}
+
+		// POST /api/preset/recall — recall a preset
+		if (req.method === "POST" && path === "/api/preset/recall") {
+			try {
+				const body = await req.json() as { name?: string };
+				if (!body.name) {
+					return errorResponse("name is required");
+				}
+				await core.recallPreset(body.name);
+				return jsonResponse({ success: true });
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return errorResponse(msg, 500);
+			}
+		}
+
+		// POST /api/preset/save — save a preset
+		if (req.method === "POST" && path === "/api/preset/save") {
+			try {
+				const body = await req.json() as { name?: string };
+				if (!body.name) {
+					return errorResponse("name is required");
+				}
+				core.savePreset(body.name);
+				return jsonResponse({ success: true });
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return errorResponse(msg, 500);
+			}
+		}
+
+		// DELETE /api/preset/:name — delete a preset
+		if (req.method === "DELETE" && path.startsWith("/api/preset/")) {
+			try {
+				const name = decodeURIComponent(path.replace("/api/preset/", ""));
+				if (!name || name === "recall" || name === "save") {
+					return errorResponse("preset name is required");
+				}
+				core.deletePreset(name);
+				return jsonResponse({ success: true });
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return errorResponse(msg, 500);
+			}
+		}
+
+		// POST /api/connect — connect to ATEM
+		if (req.method === "POST" && path === "/api/connect") {
+			try {
+				const body = await req.json() as { ip?: string };
+				if (!body.ip) {
+					return errorResponse("ip is required");
+				}
+				core.connect(body.ip);
+				return jsonResponse({ success: true });
+			} catch (err: unknown) {
+				const msg = err instanceof Error ? err.message : String(err);
+				return errorResponse(msg, 500);
+			}
+		}
+
+		return errorResponse("Not found", 404);
+	},
+});
+
 console.log("ATEM Audio Router started!");
+console.log(`HTTP API listening on port ${API_PORT}`);
