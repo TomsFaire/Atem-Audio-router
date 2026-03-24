@@ -65,6 +65,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 	handlers: {
 		requests: {
 			connectAtem: ({ ip }) => {
+				console.log(`[RPC] connectAtem called with ip: ${ip}`);
 				core.connect(ip);
 				return { success: true };
 			},
@@ -193,6 +194,8 @@ Bun.serve({
 		if (req.method === "OPTIONS") {
 			return jsonResponse(null, 204);
 		}
+
+		console.log(`[API] ${req.method} ${path}`);
 
 		// GET /api/state — full routing state
 		if (req.method === "GET" && path === "/api/state") {

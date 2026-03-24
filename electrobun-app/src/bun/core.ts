@@ -131,8 +131,19 @@ export class AtemAudioRouterCore extends EventEmitter {
 			console.error(`[Core] ATEM error:`, err.message);
 		});
 
+		this.atem.on("info", (...args: unknown[]) => {
+			console.log(`[Core] ATEM info:`, ...args);
+		});
+
 		console.log(`[Core] Connecting to ATEM at ${ip}...`);
-		this.atem.connect(ip);
+		console.log(`[Core] atem-connection version:`, typeof this.atem.connect);
+		try {
+			this.atem.connect(ip);
+			console.log(`[Core] connect() called successfully, waiting for UDP handshake...`);
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : String(err);
+			console.error(`[Core] connect() threw:`, msg);
+		}
 	}
 
 	disconnect() {
