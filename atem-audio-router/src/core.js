@@ -175,10 +175,11 @@ class AtemAudioRouterCore extends EventEmitter {
 			}
 		}
 
-		// Cache outputs
+		// Cache outputs — use UMD/input names for aux outputs when available
 		this.outputs = {}
 		if (routing.outputs) {
 			for (const [id, output] of Object.entries(routing.outputs)) {
+				const umdName = this._getInputName(output.audioOutputId)
 				this.outputs[id] = {
 					id: Number(id),
 					audioOutputId: output.audioOutputId,
@@ -186,7 +187,7 @@ class AtemAudioRouterCore extends EventEmitter {
 					externalPortType: output.externalPortType,
 					internalPortType: output.internalPortType,
 					sourceId: output.sourceId,
-					name: output.name || `Output ${id}`,
+					name: umdName || output.name || `Output ${id}`,
 				}
 			}
 		}
