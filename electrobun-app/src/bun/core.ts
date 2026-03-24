@@ -120,7 +120,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		this.sources = {};
 		this.outputs = {};
 
-		this.atem = new Atem();
+		this.atem = new Atem({ disableMultithreaded: true });
 
 		this.atem.on("connected", async () => {
 			log("INFO", `Connected to ATEM at ${ip}`);
@@ -167,14 +167,54 @@ export class AtemAudioRouterCore extends EventEmitter {
 		});
 
 		log("INFO", `Connecting to ATEM at ${ip}...`);
-		log("INFO", `atem-connection version: ${typeof this.atem.connect}`);
-		try {
-			this.atem.connect(ip);
-			log("INFO", "connect() called successfully, waiting for UDP handshake...");
-		} catch (err: unknown) {
+		log("INFO", `Bun version: ${Bun.version}, platform: ${process.platform}, arch: ${process.arch}`);
+		log("INFO", `disableMultithreaded: true`);
+
+		const diagAtem = this.atem;
+
+		// Await the connect() promise — it's async
+		this.atem.connect(ip).then(() => {
+			log("INFO", "connect() promise resolved — UDP handshake initiated");
+		}).catch((err: unknown) => {
 			const msg = err instanceof Error ? err.message : String(err);
-			log("ERROR", "connect() threw:", msg);
-		}
+			log("ERROR", "connect() promise rejected:", msg);
+		});
+
+		// Diagnostic: deep inspection of socket internals
+		const checkSocket = () => {
+			if (!diagAtem) return;
+			try {
+				const atemAny = diagAtem as any;
+				const socket = atemAny.socket;
+				const socketProcess = socket?._socketProcess;
+				const innerSocket = socketProcess?._socket;
+				log("INFO", "Socket diagnostic:", JSON.stringify({
+					hasSocket: !!socket,
+					socketType: socket?.constructor?.name,
+					hasSocketProcess: !!socketProcess,
+					socketProcessType: socketProcess?.constructor?.name,
+					hasInnerDgramSocket: !!innerSocket,
+					innerType: innerSocket?.constructor?.name,
+					connectionState: socketProcess?._connectionState,
+					creatingSocket: !!socket?._creatingSocket,
+					disableMultithreaded: socket?._disableMultithreaded,
+					address: atemAny._address ?? socket?._address,
+					port: atemAny._port ?? socket?._port,
+				}));
+				// Also dump all own property names for discovery
+				if (socket) {
+					log("INFO", "AtemSocket keys:", Object.getOwnPropertyNames(socket).join(", "));
+				}
+				if (socketProcess) {
+					log("INFO", "SocketProcess keys:", Object.getOwnPropertyNames(socketProcess).join(", "));
+				}
+			} catch (e: unknown) {
+				const msg = e instanceof Error ? e.message : String(e);
+				log("ERROR", "Socket diagnostic error:", msg);
+			}
+		};
+		setTimeout(checkSocket, 1000);
+		setTimeout(checkSocket, 5000);
 	}
 
 	disconnect() {

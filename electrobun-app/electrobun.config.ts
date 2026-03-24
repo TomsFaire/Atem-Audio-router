@@ -8,24 +8,51 @@ export default {
 	},
 	build: {
 		bun: {
-			// Replace native addon not needed for audio routing with a no-op stub
-			plugins: [{
-				name: "stub-freetype2",
-				setup(build: { onResolve: Function; onLoad: Function }) {
-					build.onResolve({ filter: /^@julusian\/freetype2$/ }, () => ({
-						path: "stub:freetype2",
-						namespace: "stub",
-					}));
-					build.onResolve({ filter: /^pkg-prebuilds/ }, () => ({
-						path: "stub:pkg-prebuilds",
-						namespace: "stub",
-					}));
-					build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
-						contents: "module.exports = {};",
-						loader: "js",
-					}));
+			plugins: [
+				{
+					// Stub out native addon not needed for audio routing
+					name: "stub-freetype2",
+					setup(build: { onResolve: Function; onLoad: Function }) {
+						build.onResolve({ filter: /^@julusian\/freetype2$/ }, () => ({
+							path: "stub:freetype2",
+							namespace: "stub",
+						}));
+						build.onResolve({ filter: /^pkg-prebuilds/ }, () => ({
+							path: "stub:pkg-prebuilds",
+							namespace: "stub",
+						}));
+						build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
+							contents: "module.exports = {};",
+							loader: "js",
+						}));
+					},
 				},
-			}],
+				{
+					// Replace threadedclass with a shim that directly instantiates
+					// AtemSocketChild in-process. threadedclass uses dynamic require()
+					// which breaks when Bun bundles everything into a single file.
+					name: "shim-threadedclass",
+					setup(build: { onResolve: Function; onLoad: Function }) {
+						build.onResolve({ filter: /^threadedclass$/ }, () => ({
+							path: "shim:threadedclass",
+							namespace: "shim-tc",
+						}));
+						build.onLoad({ filter: /.*/, namespace: "shim-tc" }, () => ({
+							contents: `
+								const { AtemSocketChild } = require("atem-connection/dist/lib/atemSocketChild");
+								exports.threadedClass = async function(_path, _className, args, _options) {
+									return new AtemSocketChild(...args);
+								};
+								exports.ThreadedClassManager = {
+									destroy: async (instance) => { if (instance && instance.destroy) await instance.destroy(); },
+									onEvent: () => {},
+								};
+							`,
+							loader: "js",
+						}));
+					},
+				},
+			],
 		},
 		views: {
 			mainview: {

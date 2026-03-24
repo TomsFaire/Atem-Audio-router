@@ -1,7 +1,15 @@
 node_modules/
 presets/*.json
 .DS_Store
+
+# macOS Finder custom folder icons (often named Icon + carriage return; breaks tools that walk dirs)
+Icon
 Icon?
+**/Icon?
+
+# Electrobun / Bun build outputs (reproducible from source)
+electrobun-app/build/
+electrobun-app/artifacts/
 
 # Runtime config/logs
 .atem-router-config

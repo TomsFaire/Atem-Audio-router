@@ -92,7 +92,22 @@ const rpc = Electroview.defineRPC<AtemRPC>({
 	},
 });
 
-const electrobun = new Electrobun.Electroview({ rpc });
+// Debug banner
+declare global { interface Window { __debugLog?: (msg: string) => void; __electrobun?: any; __electrobunWebviewId?: any; __electrobunRpcSocketPort?: any; } }
+function debugLog(msg: string) {
+	if (window.__debugLog) window.__debugLog(msg);
+	console.log(msg);
+}
+
+debugLog(`Pre-init: __electrobun=${typeof window.__electrobun}, webviewId=${window.__electrobunWebviewId}, rpcPort=${window.__electrobunRpcSocketPort}`);
+
+let electrobun: any;
+try {
+	electrobun = new Electrobun.Electroview({ rpc });
+	debugLog("Electroview initialized OK");
+} catch (err) {
+	debugLog(`Electroview init FAILED: ${err}`);
+}
 
 // ── State ──────────────────────────────────────
 
@@ -294,7 +309,7 @@ function handleFullState(state: FullState) {
 
 // ── UI Event Handlers ──────────────────────────
 
-connectBtn.addEventListener("click", () => {
+connectBtn.addEventListener("click", async () => {
 	const ip = atemIpInput.value.trim();
 	if (!ip) {
 		showToast("Enter an ATEM IP address", "error");
@@ -302,7 +317,14 @@ connectBtn.addEventListener("click", () => {
 	}
 	statusEl.textContent = "Connecting...";
 	statusEl.className = "status connecting";
-	electrobun.rpc!.request.connectAtem({ ip });
+	debugLog(`Connect clicked, ip: ${ip}`);
+	try {
+		const result = await electrobun.rpc!.request.connectAtem({ ip });
+		debugLog(`connectAtem result: ${JSON.stringify(result)}`);
+	} catch (err) {
+		debugLog(`connectAtem RPC error: ${err}`);
+		showToast(`RPC error: ${err}`, "error");
+	}
 });
 
 atemIpInput.addEventListener("keydown", (e) => {

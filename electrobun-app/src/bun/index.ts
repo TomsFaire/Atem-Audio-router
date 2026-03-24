@@ -2,6 +2,8 @@ import { BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
 import { AtemAudioRouterCore, getLogBuffer, getLogFilePath } from "./core.ts";
 import type { FullState, PresetInfo } from "./core.ts";
 
+console.log("[Boot] index.ts loaded, setting up RPC...");
+
 // ── RPC Type Definition ────────────────────────
 
 type AtemRPC = {
@@ -79,7 +81,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: true };
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					atemRPC.message.showError({ message: msg });
+					atemRPC.send.showError({ message: msg });
 					return { success: false };
 				}
 			},
@@ -89,7 +91,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: true };
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					atemRPC.message.showError({ message: msg });
+					atemRPC.send.showError({ message: msg });
 					return { success: false };
 				}
 			},
@@ -99,7 +101,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: true };
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					atemRPC.message.showError({ message: msg });
+					atemRPC.send.showError({ message: msg });
 					return { success: false };
 				}
 			},
@@ -109,7 +111,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: true };
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					atemRPC.message.showError({ message: msg });
+					atemRPC.send.showError({ message: msg });
 					return { success: false };
 				}
 			},
@@ -122,7 +124,7 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: true };
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					atemRPC.message.showError({ message: msg });
+					atemRPC.send.showError({ message: msg });
 					return { success: false };
 				}
 			},
@@ -133,21 +135,27 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 
 // ── Bridge Core Events to Webview ──────────────
 
+function safeSend(fn: () => void) {
+	try { fn(); } catch (err) {
+		console.error("[RPC] Failed to send message to webview:", err);
+	}
+}
+
 core.on("connected", () => {
-	atemRPC.message.atemConnected({});
-	atemRPC.message.stateUpdate(core.getFullState());
+	safeSend(() => atemRPC.send.atemConnected({}));
+	safeSend(() => atemRPC.send.stateUpdate(core.getFullState()));
 });
 
 core.on("disconnected", () => {
-	atemRPC.message.atemDisconnected({});
+	safeSend(() => atemRPC.send.atemDisconnected({}));
 });
 
 core.on("stateUpdate", (state: FullState) => {
-	atemRPC.message.stateUpdate(state);
+	safeSend(() => atemRPC.send.stateUpdate(state));
 });
 
 core.on("presetsChanged", (data: { presets: PresetInfo[] }) => {
-	atemRPC.message.presetsChanged(data);
+	safeSend(() => atemRPC.send.presetsChanged(data));
 });
 
 // ── Create Window ──────────────────────────────
