@@ -14,11 +14,43 @@ for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; 
     fi
 done
 
-APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+# ── Resolve real path (bypasses macOS App Translocation) ──
+# macOS moves downloaded/unzipped .apps to a random temp path before running.
+# We need to find where the repo actually lives on disk.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
+# Detect App Translocation (path contains AppTranslocation)
+if [[ "$APP_DIR" == *"AppTranslocation"* ]]; then
+    # Ask the user to locate the repo folder
+    REAL_DIR=$(osascript -e 'set repoFolder to choose folder with prompt "ATEM Audio Router was launched from a translocated path.\n\nPlease select the Atem-Audio-router folder where you cloned the repo:"' 2>/dev/null | sed 's/alias //' | sed 's/:/\//g' | sed 's/^/\//' | sed 's/\/$//')
+
+    if [ -z "$REAL_DIR" ] || [ ! -d "$REAL_DIR/atem-audio-router" ]; then
+        # Try common locations automatically
+        for CHECK_DIR in \
+            "$HOME/Downloads/Atem-Audio-router" \
+            "$HOME/Desktop/Atem-Audio-router" \
+            "$HOME/Documents/Atem-Audio-router" \
+            "$HOME/Atem-Audio-router"; do
+            if [ -d "$CHECK_DIR/atem-audio-router" ]; then
+                REAL_DIR="$CHECK_DIR"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "$REAL_DIR" ] || [ ! -d "$REAL_DIR/atem-audio-router" ]; then
+        osascript -e 'display alert "Cannot Find Project" message "Could not locate the atem-audio-router folder.\n\nTip: Right-click the .app, choose Open, or move it out of the Downloads folder to avoid macOS App Translocation." as critical buttons {"OK"}'
+        exit 1
+    fi
+
+    APP_DIR="$REAL_DIR"
+fi
+
 SERVER_DIR="$APP_DIR/atem-audio-router"
-CONFIG_FILE="$APP_DIR/.atem-router-config"
+CONFIG_FILE="$HOME/.atem-router-config"
 PORT=4000
-LOG_FILE="$APP_DIR/.atem-router.log"
+LOG_FILE="$HOME/.atem-router.log"
 
 # ── Check for Node.js ────────────────────────────
 if ! command -v node &>/dev/null; then
