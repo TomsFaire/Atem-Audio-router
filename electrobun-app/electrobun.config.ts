@@ -7,6 +7,26 @@ export default {
 		version: "1.0.0",
 	},
 	build: {
+		bun: {
+			// Replace native addon not needed for audio routing with a no-op stub
+			plugins: [{
+				name: "stub-freetype2",
+				setup(build: { onResolve: Function; onLoad: Function }) {
+					build.onResolve({ filter: /^@julusian\/freetype2$/ }, () => ({
+						path: "stub:freetype2",
+						namespace: "stub",
+					}));
+					build.onResolve({ filter: /^pkg-prebuilds/ }, () => ({
+						path: "stub:pkg-prebuilds",
+						namespace: "stub",
+					}));
+					build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
+						contents: "module.exports = {};",
+						loader: "js",
+					}));
+				},
+			}],
+		},
 		views: {
 			mainview: {
 				entrypoint: "src/mainview/index.ts",
