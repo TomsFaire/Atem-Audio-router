@@ -26,11 +26,24 @@ A standalone Node.js server connects to your ATEM and exposes a Socket.IO API. T
 
 ## Quick Start
 
-### 1. Install and run the server
+### 1. Install dependencies
+
+After cloning, run the setup script from the repo root — this installs dependencies for both the server and the companion module:
+
+```bash
+./setup.sh
+```
+
+Or install manually:
+
+```bash
+cd atem-audio-router && npm install
+```
+
+### 2. Run the server
 
 ```bash
 cd atem-audio-router
-npm install
 npm start                    # start without connecting to an ATEM
 npm start 10.0.0.100        # connect to an ATEM at startup
 npm start 10.0.0.100 --split-stereo   # connect and split all stereo inputs to dual mono
@@ -46,7 +59,7 @@ PORT=8080 ATEM_IP=10.0.0.100 SPLIT_STEREO=true npm start
 
 Use the `--split-stereo` flag (or `SPLIT_STEREO=true` env var) to automatically split all stereo audio inputs into dual mono channels on connect. This sets every Fairlight input that supports it to `DualMono` configuration, giving you individual control over each channel in the routing matrix. Inputs that don't support dual mono are left unchanged.
 
-### 2. Open the web UI
+### 3. Open the web UI
 
 Navigate to `http://localhost:4000` in your browser.
 
@@ -55,7 +68,7 @@ Navigate to `http://localhost:4000` in your browser.
 - Click any crosspoint cell to route that source to that output
 - Active routes are shown as green dots
 
-### 3. Save and recall presets
+### 4. Save and recall presets
 
 Use the **Presets** panel on the right side of the web UI:
 
