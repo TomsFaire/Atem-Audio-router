@@ -46,4 +46,8 @@ export default {
 			bundleCEF: false,
 		},
 	},
+	scripts: {
+		postBuild: "scripts/patch-plist.ts",
+		postWrap: "scripts/patch-plist.ts",
+	},
 } satisfies ElectrobunConfig;
