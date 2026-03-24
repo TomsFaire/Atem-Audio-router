@@ -3,6 +3,17 @@
 # ATEM Audio Router — macOS .app launcher
 # Starts the Node.js server and opens the web UI
 
+# macOS .app bundles run with a minimal PATH — add common Node.js locations
+export PATH="/usr/local/bin:/opt/homebrew/bin:/opt/local/bin:$HOME/.nvm/versions/node/$(ls -1 $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:$PATH"
+
+# Also source shell profile in case Node is managed by nvm/fnm/volta
+for f in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+    if [ -f "$f" ]; then
+        source "$f" 2>/dev/null
+        break
+    fi
+done
+
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 SERVER_DIR="$APP_DIR/atem-audio-router"
 CONFIG_FILE="$APP_DIR/.atem-router-config"
