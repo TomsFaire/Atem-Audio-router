@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# ATEM Audio Router — macOS .app launcher
+# Starts the Node.js server and opens the web UI
+
+APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+SERVER_DIR="$APP_DIR/atem-audio-router"
+CONFIG_FILE="$APP_DIR/.atem-router-config"
+PORT=4000
+LOG_FILE="$APP_DIR/.atem-router.log"
+
+# ── Check for Node.js ────────────────────────────
+if ! command -v node &>/dev/null; then
+    osascript -e 'display alert "Node.js Required" message "ATEM Audio Router requires Node.js to run.\n\nInstall it from https://nodejs.org" as critical buttons {"OK"}'
+    exit 1
+fi
+
+# ── Install dependencies if needed ───────────────
+if [ ! -d "$SERVER_DIR/node_modules" ]; then
+    osascript -e 'display notification "Installing dependencies..." with title "ATEM Audio Router"'
+    cd "$SERVER_DIR" && npm install >> "$LOG_FILE" 2>&1
+    if [ $? -ne 0 ]; then
+        osascript -e 'display alert "Install Failed" message "Could not install dependencies. Check the log at:\n'"$LOG_FILE"'" as critical buttons {"OK"}'
+        exit 1
+    fi
+fi
+
+# ── Load or prompt for ATEM IP ───────────────────
+ATEM_IP=""
+SPLIT_STEREO=""
+
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+fi
+
+PROMPT_TEXT="Enter ATEM IP address:"
+if [ -n "$ATEM_IP" ]; then
+    PROMPT_TEXT="Enter ATEM IP address (last used: $ATEM_IP):"
+fi
+
+RESULT=$(osascript <<EOF
+set defaultIP to "$ATEM_IP"
+set splitDefault to false
+if "$SPLIT_STEREO" is "true" then
+    set splitDefault to true
+end if
+
+set ipDialog to display dialog "$PROMPT_TEXT" default answer defaultIP buttons {"No ATEM", "Connect"} default button "Connect" with title "ATEM Audio Router"
+set atemIP to text returned of ipDialog
+set chosenButton to button returned of ipDialog
+
+if chosenButton is "No ATEM" then
+    return "||false"
+end if
+
+try
+    set splitDialog to display dialog "Split all stereo inputs to dual mono?" buttons {"No", "Yes"} default button "No" with title "ATEM Audio Router"
+    if button returned of splitDialog is "Yes" then
+        return atemIP & "|" & "true"
+    else
+        return atemIP & "|" & "false"
+    end if
+on error
+    return atemIP & "|" & "false"
+end try
+EOF
+)
+
+# User cancelled the dialog
+if [ $? -ne 0 ]; then
+    exit 0
+fi
+
+ATEM_IP=$(echo "$RESULT" | cut -d'|' -f1)
+SPLIT_STEREO=$(echo "$RESULT" | cut -d'|' -f2)
+
+# Save config for next launch
+cat > "$CONFIG_FILE" << CONF
+ATEM_IP="$ATEM_IP"
+SPLIT_STEREO="$SPLIT_STEREO"
+CONF
+
+# ── Build launch args ────────────────────────────
+ARGS=""
+if [ -n "$ATEM_IP" ]; then
+    ARGS="$ATEM_IP"
+fi
+if [ "$SPLIT_STEREO" = "true" ]; then
+    ARGS="$ARGS --split-stereo"
+fi
+
+# ── Start the server ─────────────────────────────
+cd "$SERVER_DIR"
+
+echo "$(date): Starting ATEM Audio Router..." >> "$LOG_FILE"
+echo "  ATEM IP: ${ATEM_IP:-none}" >> "$LOG_FILE"
+echo "  Split Stereo: $SPLIT_STEREO" >> "$LOG_FILE"
+
+node src/server.js $ARGS >> "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+
+# Wait a moment for the server to start
+sleep 1
+
+# Check if server is still running
+if ! kill -0 $SERVER_PID 2>/dev/null; then
+    osascript -e 'display alert "Server Failed" message "The ATEM Audio Router server failed to start. Check the log at:\n'"$LOG_FILE"'" as critical buttons {"OK"}'
+    exit 1
+fi
+
+# ── Open the web UI ──────────────────────────────
+open "http://localhost:$PORT"
+
+# ── Show notification ────────────────────────────
+osascript -e 'display notification "Server running on port '"$PORT"'" with title "ATEM Audio Router" subtitle "Web UI opened in browser"'
+
+# ── Wait for server to exit ──────────────────────
+# Keep the .app process alive so it shows in the dock
+wait $SERVER_PID

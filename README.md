@@ -26,7 +26,22 @@ A standalone Node.js server connects to your ATEM and exposes a Socket.IO API. T
 
 ## Quick Start
 
-### 1. Install dependencies
+### Option A: Launch as a macOS app
+
+Double-click **ATEM Audio Router.app** in the repo folder. On first launch it will:
+
+1. Install dependencies automatically (if needed)
+2. Prompt you for the ATEM IP address
+3. Ask if you want to split stereo inputs to dual mono
+4. Start the server and open the web UI in your browser
+
+The app remembers your settings between launches. It runs in the dock — quit it to stop the server.
+
+> **Note:** Requires Node.js to be installed on the machine.
+
+### Option B: Command line
+
+#### 1. Install dependencies
 
 After cloning, run the setup script from the repo root — this installs dependencies for both the server and the companion module:
 

@@ -3,6 +3,10 @@ presets/*.json
 .DS_Store
 Icon?
 
+# Runtime config/logs
+.atem-router-config
+.atem-router.log
+
 # Planning docs / internal notes
 plan.md
 quizzical-splashing-raccoon.md
