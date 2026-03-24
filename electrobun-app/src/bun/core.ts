@@ -380,6 +380,38 @@ export class AtemAudioRouterCore extends EventEmitter {
 		return null;
 	}
 
+	/** Fairlight routing `audioSourceId` is a strip index, not SDI input id — UMD names mis-label MADI rows (e.g. "MADI 7" vs wire ch 13/14). */
+	_isMadiRoutingSource(internalPortType: number, externalPortType: number): boolean {
+		if (internalPortType === Enums.AudioInternalPortType.Madi) return true;
+		const m = Enums.ExternalPortType.MADI;
+		return (externalPortType & m) === m;
+	}
+
+	_buildRoutingSourceDisplayName(
+		routingId: string,
+		src: Record<string, unknown>,
+	): string {
+		const routingName = typeof src.name === "string" ? src.name.trim() : "";
+		const pair = src.audioChannelPair as number;
+		const ch = this._formatInputChannelSuffix(pair);
+		const intt = src.internalPortType as number;
+		const ext = src.externalPortType as number;
+		const audioSourceId = src.audioSourceId as number;
+
+		// Switcher-authored label (matches ATEM Software routing UI when present)
+		if (routingName.length > 0) {
+			return routingName;
+		}
+
+		if (this._isMadiRoutingSource(intt, ext)) {
+			return `MADI ${ch}`;
+		}
+
+		const umdName = this._getInputName(audioSourceId);
+		const base = umdName || `Source ${routingId}`;
+		return `${base} ${ch}`;
+	}
+
 	_readFullRoutingState() {
 		if (!this.atem || !this.atem.state) return;
 
@@ -394,13 +426,22 @@ export class AtemAudioRouterCore extends EventEmitter {
 		// Cache sources
 		this.sources = {};
 		if (routing.sources) {
-			for (const [id, source] of Object.entries(routing.sources)) {
+			const sourceEntries = Object.entries(routing.sources).sort(([ida, a], [idb, b]) => {
+				const sa = a as Record<string, unknown>;
+				const sb = b as Record<string, unknown>;
+				const ai = sa.audioSourceId as number;
+				const bi = sb.audioSourceId as number;
+				if (ai !== bi) return ai - bi;
+				const ap = sa.audioChannelPair as number;
+				const bp = sb.audioChannelPair as number;
+				if (ap !== bp) return ap - bp;
+				return Number(ida) - Number(idb);
+			});
+
+			for (const [id, source] of sourceEntries) {
 				const src = source as Record<string, unknown>;
-				const umdName = this._getInputName(src.audioSourceId as number);
 				const pair = src.audioChannelPair as number;
-				const base = umdName || (src.name as string) || `Source ${id}`;
-				const ch = this._formatInputChannelSuffix(pair);
-				const displayName = `${base} ${ch}`;
+				const displayName = this._buildRoutingSourceDisplayName(id, src);
 
 				this.sources[id] = {
 					id: Number(id),
@@ -466,11 +507,22 @@ export class AtemAudioRouterCore extends EventEmitter {
 	}
 
 	getFullState(): FullState {
+		const bySourceOrder = (a: Source, b: Source) => {
+			if (a.audioSourceId !== b.audioSourceId) return a.audioSourceId - b.audioSourceId;
+			if (a.audioChannelPair !== b.audioChannelPair) return a.audioChannelPair - b.audioChannelPair;
+			return a.id - b.id;
+		};
+		const byOutputOrder = (a: Output, b: Output) => {
+			if (a.audioOutputId !== b.audioOutputId) return a.audioOutputId - b.audioOutputId;
+			if (a.audioChannelPair !== b.audioChannelPair) return a.audioChannelPair - b.audioChannelPair;
+			return a.id - b.id;
+		};
+
 		return {
 			connected: this.connected,
 			atemIp: this.atemIp,
-			sources: Object.values(this.sources),
-			outputs: Object.values(this.outputs),
+			sources: Object.values(this.sources).sort(bySourceOrder),
+			outputs: Object.values(this.outputs).sort(byOutputOrder),
 			presets: this.listPresets(),
 		};
 	}
