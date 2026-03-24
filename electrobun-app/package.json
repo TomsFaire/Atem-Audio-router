@@ -1,6 +1,6 @@
 {
 	"name": "atem-audio-router",
-	"version": "1.0.0",
+	"version": "0.0.2",
 	"type": "module",
 	"description": "Real-time audio routing matrix for Blackmagic ATEM Constellation switchers",
 	"scripts": {

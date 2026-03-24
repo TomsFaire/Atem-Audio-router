@@ -4,7 +4,7 @@ export default {
 	app: {
 		name: "ATEM Audio Router",
 		identifier: "com.faire.atem-audio-router",
-		version: "1.0.0",
+		version: "0.0.2",
 	},
 	build: {
 		bun: {
