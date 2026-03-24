@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>ATEM Audio Router</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<header>
+		<div class="header-left">
+			<h1>ATEM Audio Router</h1>
+			<div id="connection-status" class="status disconnected">Disconnected</div>
+		</div>
+		<div class="header-right">
+			<input type="text" id="atem-ip" placeholder="ATEM IP Address" />
+			<button id="connect-btn">Connect</button>
+		</div>
+	</header>
+
+	<main>
+		<div id="matrix-container">
+			<div id="matrix-placeholder">
+				<p>Enter an ATEM IP address and click Connect to begin.</p>
+			</div>
+		</div>
+
+		<aside id="preset-panel">
+			<h2>Presets</h2>
+			<div class="preset-save">
+				<input type="text" id="preset-name" placeholder="Preset name" />
+				<button id="save-preset-btn">Save</button>
+			</div>
+			<ul id="preset-list"></ul>
+		</aside>
+	</main>
+
+	<div id="toast" class="toast hidden"></div>
+
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="app.js"></script>
+</body>
+</html>
