@@ -138,6 +138,48 @@ class AtemAudioRouterCore extends EventEmitter {
 		}
 	}
 
+	_getOutputTypeName(internalPortType, externalPortType) {
+		const internalNames = {
+			6: 'Program',
+			7: 'Return',
+			8: 'Monitor',
+			9: 'MADI Out',
+			10: 'Aux',
+			11: 'Audio Aux',
+		}
+		if (internalPortType && internalNames[internalPortType]) {
+			return internalNames[internalPortType]
+		}
+		const externalFlags = {
+			1: 'SDI Out',
+			2: 'HDMI Out',
+			32: 'XLR Out',
+			128: 'RCA Out',
+			1024: 'MADI Out',
+			2048: 'TRS Out',
+		}
+		if (externalPortType) {
+			for (const [flag, label] of Object.entries(externalFlags)) {
+				if (externalPortType & Number(flag)) return label
+			}
+		}
+		return 'Output'
+	}
+
+	_getChannelPairLabel(audioChannelPair) {
+		const labels = {
+			0: 'Ch 1-2',
+			1: 'Ch 3-4',
+			2: 'Ch 5-6',
+			3: 'Ch 7-8',
+			4: 'Ch 9-10',
+			5: 'Ch 11-12',
+			6: 'Ch 13-14',
+			7: 'Ch 15-16',
+		}
+		return labels[audioChannelPair] || null
+	}
+
 	_getInputName(audioSourceId) {
 		if (!this.atem || !this.atem.state || !this.atem.state.inputs) return null
 
@@ -175,11 +217,38 @@ class AtemAudioRouterCore extends EventEmitter {
 			}
 		}
 
-		// Cache outputs — use UMD/input names for aux outputs when available
+		// Cache outputs — build names from routing state with channel pair info
+		// Note: audioOutputId does NOT map to state.inputs, unlike sources
 		this.outputs = {}
+		const outputCounters = {}
 		if (routing.outputs) {
+			// First pass: count outputs per base name to decide if we need numbering
+			const nameGroups = {}
 			for (const [id, output] of Object.entries(routing.outputs)) {
-				const umdName = this._getInputName(output.audioOutputId)
+				const baseName = output.name || this._getOutputTypeName(output.internalPortType, output.externalPortType)
+				if (!nameGroups[baseName]) nameGroups[baseName] = []
+				nameGroups[baseName].push(id)
+			}
+
+			// Second pass: build entries with sequential numbering where needed
+			const nameCounters = {}
+			for (const [id, output] of Object.entries(routing.outputs)) {
+				const baseName = output.name || this._getOutputTypeName(output.internalPortType, output.externalPortType)
+				const needsNumber = nameGroups[baseName].length > 1
+
+				let displayName = baseName
+				if (needsNumber) {
+					if (!nameCounters[baseName]) nameCounters[baseName] = 0
+					nameCounters[baseName]++
+					displayName = `${baseName} ${nameCounters[baseName]}`
+				}
+
+				// Append channel pair if output has multiple pairs
+				const pairLabel = this._getChannelPairLabel(output.audioChannelPair)
+				if (pairLabel) {
+					displayName += ` ${pairLabel}`
+				}
+
 				this.outputs[id] = {
 					id: Number(id),
 					audioOutputId: output.audioOutputId,
@@ -187,7 +256,7 @@ class AtemAudioRouterCore extends EventEmitter {
 					externalPortType: output.externalPortType,
 					internalPortType: output.internalPortType,
 					sourceId: output.sourceId,
-					name: umdName || output.name || `Output ${id}`,
+					name: displayName,
 				}
 			}
 		}
