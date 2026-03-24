@@ -1,0 +1,18 @@
+{
+	"name": "atem-audio-router",
+	"version": "1.0.0",
+	"type": "module",
+	"description": "Real-time audio routing matrix for Blackmagic ATEM Constellation switchers",
+	"scripts": {
+		"start": "electrobun dev",
+		"dev": "electrobun dev --watch",
+		"build": "electrobun build"
+	},
+	"dependencies": {
+		"electrobun": "latest",
+		"atem-connection": "^3.9.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	}
+}
