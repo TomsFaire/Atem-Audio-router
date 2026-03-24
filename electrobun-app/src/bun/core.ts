@@ -1,7 +1,38 @@
 import { Atem, Enums } from "atem-connection";
 import { EventEmitter } from "events";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, appendFileSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
+
+// ── Logger ─────────────────────────────────────
+
+const LOG_DIR = join(homedir(), "Library", "Logs", "ATEM Audio Router");
+if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
+const LOG_FILE = join(LOG_DIR, "app.log");
+
+const logBuffer: string[] = [];
+const MAX_LOG_LINES = 500;
+
+function log(level: string, ...args: unknown[]) {
+	const ts = new Date().toISOString();
+	const msg = `${ts} [${level}] ${args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")}`;
+	logBuffer.push(msg);
+	if (logBuffer.length > MAX_LOG_LINES) logBuffer.shift();
+	try { appendFileSync(LOG_FILE, msg + "\n"); } catch {}
+	if (level === "ERROR") {
+		console.error(msg);
+	} else {
+		console.log(msg);
+	}
+}
+
+export function getLogBuffer(): string[] {
+	return logBuffer;
+}
+
+export function getLogFilePath(): string {
+	return LOG_FILE;
+}
 
 // ── Types ──────────────────────────────────────
 
@@ -92,7 +123,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		this.atem = new Atem();
 
 		this.atem.on("connected", async () => {
-			console.log(`[Core] Connected to ATEM at ${ip}`);
+			log("INFO", `Connected to ATEM at ${ip}`);
 			this.connected = true;
 
 			if (this.splitStereo) {
@@ -106,7 +137,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		});
 
 		this.atem.on("disconnected", () => {
-			console.log(`[Core] Disconnected from ATEM`);
+			log("INFO", "Disconnected from ATEM");
 			this.connected = false;
 			this.emit("disconnected");
 		});
@@ -128,21 +159,21 @@ export class AtemAudioRouterCore extends EventEmitter {
 		});
 
 		this.atem.on("error", (err: Error) => {
-			console.error(`[Core] ATEM error:`, err.message);
+			log("ERROR", "ATEM error:", err.message);
 		});
 
 		this.atem.on("info", (...args: unknown[]) => {
-			console.log(`[Core] ATEM info:`, ...args);
+			log("INFO", "ATEM info:", ...args);
 		});
 
-		console.log(`[Core] Connecting to ATEM at ${ip}...`);
-		console.log(`[Core] atem-connection version:`, typeof this.atem.connect);
+		log("INFO", `Connecting to ATEM at ${ip}...`);
+		log("INFO", `atem-connection version: ${typeof this.atem.connect}`);
 		try {
 			this.atem.connect(ip);
-			console.log(`[Core] connect() called successfully, waiting for UDP handshake...`);
+			log("INFO", "connect() called successfully, waiting for UDP handshake...");
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : String(err);
-			console.error(`[Core] connect() threw:`, msg);
+			log("ERROR", "connect() threw:", msg);
 		}
 	}
 
@@ -182,15 +213,15 @@ export class AtemAudioRouterCore extends EventEmitter {
 					splitCount++;
 				} catch (err: unknown) {
 					const msg = err instanceof Error ? err.message : String(err);
-					console.error(`[Core] Failed to split input ${inputIndex}:`, msg);
+					log("ERROR", `Failed to split input ${inputIndex}:`, msg);
 				}
 			}
 		}
 
 		if (splitCount > 0) {
-			console.log(`[Core] Split ${splitCount} stereo input(s) to dual mono`);
+			log("INFO", `Split ${splitCount} stereo input(s) to dual mono`);
 		} else {
-			console.log(`[Core] No stereo inputs to split (all already dual mono or unsupported)`);
+			log("INFO", "No stereo inputs to split (all already dual mono or unsupported)");
 		}
 	}
 
@@ -258,7 +289,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 
 		const fairlight = this.atem.state.fairlight;
 		if (!fairlight || !fairlight.audioRouting) {
-			console.log("[Core] No audio routing data available (firmware 9.4+ required)");
+			log("WARN", "No audio routing data available (firmware 9.4+ required)");
 			return;
 		}
 
@@ -330,7 +361,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 
 		const sourceCount = Object.keys(this.sources).length;
 		const outputCount = Object.keys(this.outputs).length;
-		console.log(`[Core] Routing state: ${sourceCount} sources, ${outputCount} outputs`);
+		log("INFO", `Routing state: ${sourceCount} sources, ${outputCount} outputs`);
 	}
 
 	getFullState(): FullState {
@@ -348,7 +379,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 			throw new Error("Not connected to ATEM");
 		}
 
-		console.log(`[Core] Setting route: output ${outputId} -> source ${sourceId}`);
+		log("INFO", `Setting route: output ${outputId} -> source ${sourceId}`);
 		await this.atem.setFairlightAudioRoutingOutputProperties(Number(outputId), {
 			sourceId: Number(sourceId),
 		});
@@ -390,7 +421,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		const filepath = join(this.presetsDir, filename);
 		writeFileSync(filepath, JSON.stringify(preset, null, 2));
 
-		console.log(`[Core] Saved preset "${name}" (${Object.keys(routes).length} routes)`);
+		log("INFO", `Saved preset "${name}" (${Object.keys(routes).length} routes)`);
 		this.emit("presetsChanged", { presets: this.listPresets() });
 		return preset;
 	}
@@ -409,7 +440,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		const filepath = join(this.presetsDir, presetInfo.filename);
 		const preset = JSON.parse(readFileSync(filepath, "utf-8")) as Preset;
 
-		console.log(`[Core] Recalling preset "${name}"...`);
+		log("INFO", `Recalling preset "${name}"...`);
 
 		let changed = 0;
 		for (const [outputId, sourceId] of Object.entries(preset.routes)) {
@@ -422,7 +453,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 			}
 		}
 
-		console.log(`[Core] Preset "${name}" applied (${changed} routes changed)`);
+		log("INFO", `Preset "${name}" applied (${changed} routes changed)`);
 	}
 
 	deletePreset(name: string) {
@@ -435,7 +466,7 @@ export class AtemAudioRouterCore extends EventEmitter {
 		const filepath = join(this.presetsDir, presetInfo.filename);
 		unlinkSync(filepath);
 
-		console.log(`[Core] Deleted preset "${name}"`);
+		log("INFO", `Deleted preset "${name}"`);
 		this.emit("presetsChanged", { presets: this.listPresets() });
 	}
 

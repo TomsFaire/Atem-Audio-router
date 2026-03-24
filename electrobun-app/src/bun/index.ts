@@ -1,5 +1,5 @@
 import { BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
-import { AtemAudioRouterCore } from "./core.ts";
+import { AtemAudioRouterCore, getLogBuffer, getLogFilePath } from "./core.ts";
 import type { FullState, PresetInfo } from "./core.ts";
 
 // ── RPC Type Definition ────────────────────────
@@ -282,9 +282,18 @@ Bun.serve({
 			}
 		}
 
+		// GET /api/logs — recent log buffer for diagnostics
+		if (req.method === "GET" && path === "/api/logs") {
+			return jsonResponse({
+				logFile: getLogFilePath(),
+				lines: getLogBuffer(),
+			});
+		}
+
 		return errorResponse("Not found", 404);
 	},
 });
 
 console.log("ATEM Audio Router started!");
 console.log(`HTTP API listening on port ${API_PORT}`);
+console.log(`Log file: ${getLogFilePath()}`);
