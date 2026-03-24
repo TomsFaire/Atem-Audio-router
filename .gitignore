@@ -2,3 +2,8 @@ node_modules/
 presets/*.json
 .DS_Store
 Icon?
+
+# Planning docs / internal notes
+plan.md
+quizzical-splashing-raccoon.md
+*.plan.md
