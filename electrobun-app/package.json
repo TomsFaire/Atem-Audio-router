@@ -4,9 +4,10 @@
 	"type": "module",
 	"description": "Real-time audio routing matrix for Blackmagic ATEM Constellation switchers",
 	"scripts": {
-		"start": "electrobun dev",
-		"dev": "electrobun dev --watch",
-		"build": "electrobun build"
+		"start": "bun run scripts/generate-build-info.ts && electrobun dev",
+		"dev": "bun run scripts/generate-build-info.ts && electrobun dev --watch",
+		"generate-build-info": "bun run scripts/generate-build-info.ts",
+		"build": "bun run scripts/generate-build-info.ts && electrobun build"
 	},
 	"dependencies": {
 		"electrobun": "latest",

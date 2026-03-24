@@ -67,6 +67,21 @@ body {
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	min-height: 100vh;
+	padding-bottom: var(--space-8);
+}
+
+.app-build-footer {
+	position: fixed;
+	bottom: var(--space-3);
+	left: var(--space-4);
+	font-size: 11px;
+	line-height: 1.35;
+	color: var(--color-text-subdued);
+	font-variant-numeric: tabular-nums;
+	z-index: 20;
+	max-width: min(560px, calc(100vw - var(--space-8)));
+	pointer-events: none;
+	user-select: none;
 }
 
 /* ── HEADER ──────────────────────────────────── */

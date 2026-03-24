@@ -305,6 +305,14 @@ export class AtemAudioRouterCore extends EventEmitter {
 			await this._applySplitStereoDualMono();
 			this._readFullRoutingState();
 			this.emit("stateUpdate", this.getFullState());
+			// Routing rows/columns can lag behind DualMono — same as on connect
+			setTimeout(() => {
+				if (!this.splitStereo || !this.connected || !this.atem) return;
+				void this._applySplitStereoDualMono().then(() => {
+					this._readFullRoutingState();
+					this.emit("stateUpdate", this.getFullState());
+				});
+			}, 600);
 		}
 	}
 
@@ -350,6 +358,18 @@ export class AtemAudioRouterCore extends EventEmitter {
 		return labels[audioChannelPair] || null;
 	}
 
+	/** Always-on channel range for routing sources, appended after the input name. */
+	_formatInputChannelSuffix(audioChannelPair: number): string {
+		if (typeof audioChannelPair === "number" && audioChannelPair >= 0) {
+			const known = this._getChannelPairLabel(audioChannelPair);
+			if (known) return known;
+			const start = audioChannelPair * 2 + 1;
+			const end = audioChannelPair * 2 + 2;
+			return `Ch ${start}-${end}`;
+		}
+		return "Ch ?";
+	}
+
 	_getInputName(audioSourceId: number): string | null {
 		if (!this.atem || !this.atem.state || !this.atem.state.inputs) return null;
 
@@ -377,13 +397,18 @@ export class AtemAudioRouterCore extends EventEmitter {
 			for (const [id, source] of Object.entries(routing.sources)) {
 				const src = source as Record<string, unknown>;
 				const umdName = this._getInputName(src.audioSourceId as number);
+				const pair = src.audioChannelPair as number;
+				const base = umdName || (src.name as string) || `Source ${id}`;
+				const ch = this._formatInputChannelSuffix(pair);
+				const displayName = `${base} ${ch}`;
+
 				this.sources[id] = {
 					id: Number(id),
 					audioSourceId: src.audioSourceId as number,
-					audioChannelPair: src.audioChannelPair as number,
+					audioChannelPair: pair,
 					externalPortType: src.externalPortType as number,
 					internalPortType: src.internalPortType as number,
-					name: umdName || (src.name as string) || `Source ${id}`,
+					name: displayName,
 				};
 			}
 		}

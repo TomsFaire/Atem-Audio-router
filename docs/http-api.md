@@ -12,7 +12,24 @@ GET /api/state
 
 Returns all sources, outputs, presets, and connection status.
 
+### Get app build / version
+
+```
+GET /api/build
+```
+
+Returns the same version and build id shown in the app’s bottom-left footer (from `package.json` version and git short hash at build time).
+
 **Response:**
+```json
+{
+  "version": "0.0.2",
+  "buildId": "6ca0ff2",
+  "builtAt": "2026-03-24T12:00:00.000Z"
+}
+```
+
+**Example `/api/state` response:**
 ```json
 {
   "connected": true,

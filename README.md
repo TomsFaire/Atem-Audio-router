@@ -27,6 +27,10 @@ Then open the app normally.
 3. Click any crosspoint cell to route that source to that output — active routes show as green dots
 4. Hover over a cell to highlight the full row and column
 
+**Source rows** show the input name plus **embedded channel pair** (e.g. `Ch 1-2`, or `(pair 3)` if unmapped). Hover a row label to see the routing source id and pair index. **Split Stereo** changes how many strips the switcher exposes and how outputs split; row count alone is not always a reliable indicator—use the build stamp below to confirm you are on the build you expect.
+
+**Version stamp:** the bottom-left corner shows `v<version> · build <git> · <date>`. Release DMGs bake in the git short hash at package time; if you see `build dev`, you are running a local dev build without regenerating build info. You can also run `curl -s http://127.0.0.1:4000/api/build` while the app is running.
+
 ### Presets
 
 - Type a name in the Presets panel and click **Save** to snapshot the current routing state
@@ -44,6 +48,7 @@ The app runs an HTTP API on port **4000** for integration with Q-SYS, Crestron, 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/state` | Full routing state |
+| `GET` | `/api/build` | App version and build id (same as UI footer) |
 | `POST` | `/api/route` | Set a route — `{"outputId": ..., "sourceId": ...}` |
 | `GET` | `/api/presets` | List saved presets |
 | `POST` | `/api/preset/recall` | Recall a preset — `{"name": "..."}` |

@@ -35,6 +35,12 @@ interface FullState {
 	presets: PresetInfo[];
 }
 
+interface BuildInfo {
+	version: string;
+	buildId: string;
+	builtAt: string;
+}
+
 type AtemRPC = {
 	bun: {
 		requests: {
@@ -46,6 +52,7 @@ type AtemRPC = {
 			deletePreset: { params: { name: string }; response: { success: boolean } };
 			getFullState: { params: Record<string, never>; response: FullState };
 			setSplitStereo: { params: { enabled: boolean }; response: { success: boolean } };
+			getBuildInfo: { params: Record<string, never>; response: BuildInfo };
 		};
 		messages: Record<string, never>;
 	};
@@ -116,6 +123,16 @@ let outputs: Output[] = [];
 let presets: PresetInfo[] = [];
 let atemConnected = false;
 
+/** When split stereo or routing updates, row/col counts or labels can change without the cell count matching the previous “expected” size in edge cases — track structure explicitly. */
+let lastMatrixStructureKey = "";
+
+function matrixStructureKey(sources: Source[], outputs: Output[]): string {
+	return JSON.stringify({
+		s: sources.map((x) => [x.id, x.name]),
+		o: outputs.map((x) => [x.id, x.name]),
+	});
+}
+
 // ── DOM Refs ───────────────────────────────────
 
 const statusEl = document.getElementById("connection-status")!;
@@ -127,6 +144,7 @@ const presetNameInput = document.getElementById("preset-name") as HTMLInputEleme
 const savePresetBtn = document.getElementById("save-preset-btn")!;
 const presetList = document.getElementById("preset-list")!;
 const toastEl = document.getElementById("toast")!;
+const buildFooterEl = document.getElementById("app-build-footer")!;
 
 // ── Toast ──────────────────────────────────────
 
@@ -190,6 +208,9 @@ function buildMatrix() {
 		rowHeader.className = "matrix-row-header";
 		rowHeader.textContent = source.name;
 		rowHeader.dataset.sourceId = String(source.id);
+		rowHeader.title =
+			`Routing source id: ${source.id}\n` +
+			`Input index: ${source.audioSourceId} · channel pair: ${source.audioChannelPair}`;
 		grid.appendChild(rowHeader);
 
 		for (const output of outputs) {
@@ -295,10 +316,9 @@ function handleFullState(state: FullState) {
 
 	updateStatus();
 
-	// Only rebuild matrix if source/output count changed
-	const existingCells = document.querySelectorAll(".matrix-cell");
-	const expectedCells = sources.length * outputs.length;
-	if (existingCells.length !== expectedCells) {
+	const key = matrixStructureKey(sources, outputs);
+	if (key !== lastMatrixStructureKey) {
+		lastMatrixStructureKey = key;
 		buildMatrix();
 	} else {
 		updateMatrixActiveStates();
@@ -350,9 +370,32 @@ splitStereoCb.addEventListener("change", () => {
 	electrobun.rpc!.request.setSplitStereo({ enabled: splitStereoCb.checked });
 });
 
+function formatBuildFooter(b: BuildInfo): string {
+	const parts = [`v${b.version}`, `Build ${b.buildId}`];
+	if (b.builtAt) {
+		try {
+			const d = new Date(b.builtAt);
+			parts.push(d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }));
+		} catch {
+			parts.push(b.builtAt);
+		}
+	}
+	return parts.join(" · ");
+}
+
+async function loadBuildFooter() {
+	try {
+		const b = await electrobun.rpc!.request.getBuildInfo({});
+		buildFooterEl.textContent = formatBuildFooter(b);
+	} catch {
+		buildFooterEl.textContent = "Build: unavailable";
+	}
+}
+
 // ── Initial Load ───────────────────────────────
 
 async function init() {
+	await loadBuildFooter();
 	const state = await electrobun.rpc!.request.getFullState({});
 	handleFullState(state);
 }

@@ -1,6 +1,13 @@
 import { BrowserView, BrowserWindow, type RPCSchema } from "electrobun/bun";
 import { AtemAudioRouterCore, getLogBuffer, getLogFilePath } from "./core.ts";
 import type { FullState, PresetInfo } from "./core.ts";
+import { APP_VERSION, APP_BUILD_ID, APP_BUILT_AT } from "./build-info.generated.ts";
+
+export type BuildInfo = {
+	version: string;
+	buildId: string;
+	builtAt: string;
+};
 
 console.log("[Boot] index.ts loaded, setting up RPC...");
 
@@ -40,6 +47,10 @@ type AtemRPC = {
 			setSplitStereo: {
 				params: { enabled: boolean };
 				response: { success: boolean };
+			};
+			getBuildInfo: {
+				params: Record<string, never>;
+				response: BuildInfo;
 			};
 		};
 		messages: Record<string, never>;
@@ -128,6 +139,11 @@ const atemRPC = BrowserView.defineRPC<AtemRPC>({
 					return { success: false };
 				}
 			},
+			getBuildInfo: () => ({
+				version: APP_VERSION,
+				buildId: APP_BUILD_ID,
+				builtAt: APP_BUILT_AT,
+			}),
 		},
 		messages: {},
 	},
@@ -295,6 +311,15 @@ Bun.serve({
 			return jsonResponse({
 				logFile: getLogFilePath(),
 				lines: getLogBuffer(),
+			});
+		}
+
+		// GET /api/build — app version + git build id (matches footer in UI)
+		if (req.method === "GET" && path === "/api/build") {
+			return jsonResponse({
+				version: APP_VERSION,
+				buildId: APP_BUILD_ID,
+				builtAt: APP_BUILT_AT,
 			});
 		}
 
