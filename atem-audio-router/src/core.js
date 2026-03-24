@@ -62,16 +62,16 @@ class AtemAudioRouterCore extends EventEmitter {
 		})
 
 		this.atem.on('stateChanged', (state, pathsChanged) => {
-			let routingChanged = false
+			let shouldUpdate = false
 
 			for (const p of pathsChanged) {
-				if (p.startsWith('fairlight.audioRouting')) {
-					routingChanged = true
+				if (p.startsWith('fairlight.audioRouting') || p.startsWith('inputs.')) {
+					shouldUpdate = true
 					break
 				}
 			}
 
-			if (routingChanged) {
+			if (shouldUpdate) {
 				this._readFullRoutingState()
 				this.emit('stateUpdate', this.getFullState())
 			}
@@ -138,6 +138,16 @@ class AtemAudioRouterCore extends EventEmitter {
 		}
 	}
 
+	_getInputName(audioSourceId) {
+		if (!this.atem || !this.atem.state || !this.atem.state.inputs) return null
+
+		const input = this.atem.state.inputs[audioSourceId]
+		if (input) {
+			return input.longName || input.shortName || null
+		}
+		return null
+	}
+
 	_readFullRoutingState() {
 		if (!this.atem || !this.atem.state) return
 
@@ -149,17 +159,18 @@ class AtemAudioRouterCore extends EventEmitter {
 
 		const routing = fairlight.audioRouting
 
-		// Cache sources
+		// Cache sources — use UMD/input names from the ATEM when available
 		this.sources = {}
 		if (routing.sources) {
 			for (const [id, source] of Object.entries(routing.sources)) {
+				const umdName = this._getInputName(source.audioSourceId)
 				this.sources[id] = {
 					id: Number(id),
 					audioSourceId: source.audioSourceId,
 					audioChannelPair: source.audioChannelPair,
 					externalPortType: source.externalPortType,
 					internalPortType: source.internalPortType,
-					name: source.name || `Source ${id}`,
+					name: umdName || source.name || `Source ${id}`,
 				}
 			}
 		}
