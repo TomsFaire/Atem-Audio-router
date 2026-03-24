@@ -33,13 +33,18 @@ cd atem-audio-router
 npm install
 npm start                    # start without connecting to an ATEM
 npm start 10.0.0.100        # connect to an ATEM at startup
+npm start 10.0.0.100 --split-stereo   # connect and split all stereo inputs to dual mono
 ```
 
 The server runs on **port 4000** by default. Set the `PORT` environment variable to change it, or pass the ATEM IP via `ATEM_IP`:
 
 ```bash
-PORT=8080 ATEM_IP=10.0.0.100 npm start
+PORT=8080 ATEM_IP=10.0.0.100 SPLIT_STEREO=true npm start
 ```
+
+### Split Stereo Mode
+
+Use the `--split-stereo` flag (or `SPLIT_STEREO=true` env var) to automatically split all stereo audio inputs into dual mono channels on connect. This sets every Fairlight input that supports it to `DualMono` configuration, giving you individual control over each channel in the routing matrix. Inputs that don't support dual mono are left unchanged.
 
 ### 2. Open the web UI
 

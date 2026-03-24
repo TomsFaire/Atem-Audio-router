@@ -1,14 +1,15 @@
-const { Atem } = require('atem-connection')
+const { Atem, Enums } = require('atem-connection')
 const EventEmitter = require('events')
 const fs = require('fs')
 const path = require('path')
 
 class AtemAudioRouterCore extends EventEmitter {
-	constructor({ atemIp, presetsDir }) {
+	constructor({ atemIp, presetsDir, splitStereo = false }) {
 		super()
 
 		this.atemIp = atemIp || null
 		this.presetsDir = presetsDir || path.join(__dirname, '..', 'presets')
+		this.splitStereo = splitStereo
 		this.atem = null
 		this.connected = false
 
@@ -38,9 +39,14 @@ class AtemAudioRouterCore extends EventEmitter {
 
 		this.atem = new Atem()
 
-		this.atem.on('connected', () => {
+		this.atem.on('connected', async () => {
 			console.log(`[Core] Connected to ATEM at ${ip}`)
 			this.connected = true
+
+			// Split stereo inputs to dual mono if enabled
+			if (this.splitStereo) {
+				await this._splitAllStereoInputs()
+			}
 
 			// Read initial audio routing state
 			this._readFullRoutingState()
@@ -88,6 +94,48 @@ class AtemAudioRouterCore extends EventEmitter {
 		this.sources = {}
 		this.outputs = {}
 		this.emit('disconnected')
+	}
+
+	async _splitAllStereoInputs() {
+		if (!this.atem || !this.atem.state || !this.atem.state.fairlight) return
+
+		const inputs = this.atem.state.fairlight.inputs
+		if (!inputs) return
+
+		const DualMono = Enums.FairlightInputConfiguration.DualMono
+		let splitCount = 0
+
+		for (const [inputIndex, input] of Object.entries(inputs)) {
+			if (!input || !input.properties) continue
+
+			const props = input.properties
+			const supportsDualMono = props.supportedConfigurations &&
+				props.supportedConfigurations.includes(DualMono)
+
+			if (supportsDualMono && props.activeConfiguration !== DualMono) {
+				try {
+					await this.atem.setFairlightAudioMixerInputProps(Number(inputIndex), {
+						activeConfiguration: DualMono,
+					})
+					splitCount++
+				} catch (err) {
+					console.error(`[Core] Failed to split input ${inputIndex}:`, err.message)
+				}
+			}
+		}
+
+		if (splitCount > 0) {
+			console.log(`[Core] Split ${splitCount} stereo input(s) to dual mono`)
+		} else {
+			console.log(`[Core] No stereo inputs to split (all already dual mono or unsupported)`)
+		}
+	}
+
+	async setSplitStereo(enabled) {
+		this.splitStereo = enabled
+		if (enabled && this.connected) {
+			await this._splitAllStereoInputs()
+		}
 	}
 
 	_readFullRoutingState() {

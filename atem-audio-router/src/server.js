@@ -8,11 +8,13 @@ const { AtemAudioRouterCore } = require('./core')
 const args = process.argv.slice(2)
 const atemIp = args.find((a) => !a.startsWith('--')) || process.env.ATEM_IP || null
 const port = parseInt(process.env.PORT || '4000', 10)
+const splitStereo = args.includes('--split-stereo') || process.env.SPLIT_STEREO === 'true'
 
 // Create core
 const core = new AtemAudioRouterCore({
 	atemIp,
 	presetsDir: path.join(__dirname, '..', 'presets'),
+	splitStereo,
 })
 
 // Create Express + Socket.IO server
@@ -98,6 +100,9 @@ core.on('presetsChanged', (data) => {
 // Start server
 server.listen(port, () => {
 	console.log(`[Server] ATEM Audio Router running on http://localhost:${port}`)
+	if (splitStereo) {
+		console.log(`[Server] Split stereo mode enabled — all stereo inputs will be set to dual mono on connect`)
+	}
 	if (atemIp) {
 		console.log(`[Server] Connecting to ATEM at ${atemIp}`)
 	} else {
