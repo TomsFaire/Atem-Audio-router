@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/atem-audio-router"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore"
+      include: scope
+    groups:
+      server-runtime:
+        patterns: ["@modelcontextprotocol/*", "express", "ws", "socket.io*", "undici", "axios"]
+      dev-tooling:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+  - package-ecosystem: npm
+    directory: "/companion-module-atem-audiorouter"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore"
+      include: scope
