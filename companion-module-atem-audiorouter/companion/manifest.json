@@ -1,6 +1,9 @@
 {
   "id": "atem-audiorouter",
   "name": "atem-audiorouter",
+  "manufacturer": "BlackMagic",
+  "products": ["ATEM Constellation"],
+  "keywords": ["audio", "routing", "matrix"],
   "shortname": "ATEM Audio",
   "description": "Audio routing matrix control for Blackmagic ATEM Constellation switchers",
   "version": "1.0.0",
