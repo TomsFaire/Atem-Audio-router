@@ -26,6 +26,64 @@ function log(level: string, ...args: unknown[]) {
 	}
 }
 
+// ── Socket tap (debug) ─────────────────────────
+// Logs the first few UDP packets in each direction on the AtemSocketChild's dgram
+// socket. AtemSocketChild silently drops any packet whose header length differs
+// from rinfo.size, so we log both to spot runtime differences (e.g. under Bun).
+
+const TAP_MAX_PACKETS = 25;
+const tappedSockets = new WeakSet<object>();
+const tappedChildren = new WeakSet<object>();
+
+function tapSocket(socket: any, label: string) {
+	if (!socket || tappedSockets.has(socket)) return;
+	tappedSockets.add(socket);
+	let sent = 0;
+	let recv = 0;
+	let dropped = 0;
+	const origSend = socket.send.bind(socket);
+	socket.send = (...args: any[]) => {
+		if (sent++ < TAP_MAX_PACKETS) {
+			const [buf, , length, port, address] = args;
+			log("DEBUG", `[tap ${label}] SEND #${sent} ${length ?? buf?.length}b -> ${address}:${port} ${Buffer.from(buf).subarray(0, 24).toString("hex")}`);
+		}
+		return origSend(...args);
+	};
+	socket.on("message", (packet: Buffer, rinfo: { address: string; port: number; size: number }) => {
+		recv++;
+		const headerLen = packet.length >= 2 ? packet.readUInt16BE(0) & 0x07ff : -1;
+		const mismatch = headerLen !== rinfo?.size;
+		if (mismatch) dropped++;
+		if (recv <= TAP_MAX_PACKETS || mismatch) {
+			log("DEBUG", `[tap ${label}] RECV #${recv} from ${rinfo?.address}:${rinfo?.port} packet.length=${packet.length} rinfo.size=${rinfo?.size} headerLen=${headerLen}${mismatch ? " MISMATCH (library will drop this)" : ""} ${packet.subarray(0, 24).toString("hex")}`);
+		}
+	});
+	socket.on("error", (err: Error) => log("DEBUG", `[tap ${label}] socket error:`, err.message));
+	socket.on("listening", () => {
+		try { log("DEBUG", `[tap ${label}] listening on`, JSON.stringify(socket.address())); } catch {}
+	});
+	socket.on("close", () => log("DEBUG", `[tap ${label}] socket closed (sent=${sent} recv=${recv} dropped=${dropped})`));
+	try { log("DEBUG", `[tap ${label}] attached; bound to`, JSON.stringify(socket.address())); } catch { log("DEBUG", `[tap ${label}] attached; not yet bound`); }
+}
+
+// AtemSocketChild recreates its dgram socket on reconnect, so wrap _createSocket too.
+function tapAtem(atem: any, label: string): boolean {
+	const child = atem?.socket?._socketProcess;
+	// _socketProcess is a Promise until threadedClass (our shim) resolves it
+	if (!child || typeof child._createSocket !== "function" || typeof child._socket?.send !== "function") return false;
+	if (tappedChildren.has(child)) return true;
+	tappedChildren.add(child);
+	const origCreate = child._createSocket.bind(child);
+	child._createSocket = () => {
+		const s = origCreate();
+		log("DEBUG", `[tap ${label}] socket (re)created`);
+		tapSocket(s, label);
+		return s;
+	};
+	tapSocket(child._socket, label);
+	return true;
+}
+
 export function getLogBuffer(): string[] {
 	return logBuffer;
 }
@@ -191,6 +249,15 @@ export class AtemAudioRouterCore extends EventEmitter {
 			const msg = err instanceof Error ? err.message : String(err);
 			log("ERROR", "connect() promise rejected:", msg);
 		});
+
+		// Socket child is created asynchronously by connect(); poll briefly until it exists, then tap it
+		// Opt-in: set ATEM_DEBUG=1 (e.g. `ATEM_DEBUG=1 bun run start`)
+		if (process.env.ATEM_DEBUG) {
+			let tapTries = 0;
+			const tapTimer = setInterval(() => {
+				if (tapAtem(diagAtem, ip) || ++tapTries > 40) clearInterval(tapTimer);
+			}, 25);
+		}
 
 		// Diagnostic: deep inspection of socket internals
 		const checkSocket = () => {

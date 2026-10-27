@@ -24,7 +24,20 @@ function patchPlist(plistPath: string) {
 	plist = plist.replace("</dict>", additions + "\n</dict>");
 	writeFileSync(plistPath, plist);
 	console.log(`Patched: ${plistPath}`);
+	resignAdhoc(join(plistPath, "..", ".."));
 	return true;
+}
+
+// Editing Info.plist invalidates the bundle's ad-hoc signature (codesign reports
+// "Info.plist=not bound"). macOS then silently drops the app's local-network UDP
+// traffic, so the ATEM never answers. Re-sign ad-hoc so the plist is bound.
+// Only touches ad-hoc bundles; a real Developer ID signature is left alone.
+function resignAdhoc(appPath: string) {
+	if (process.platform !== "darwin") return;
+	const info = Bun.spawnSync(["codesign", "-dv", appPath]);
+	if (!new TextDecoder().decode(info.stderr).includes("Signature=adhoc")) return;
+	const res = Bun.spawnSync(["codesign", "--force", "--deep", "--sign", "-", appPath]);
+	console.log(res.exitCode === 0 ? `Re-signed ad-hoc: ${appPath}` : `Re-sign failed: ${new TextDecoder().decode(res.stderr)}`);
 }
 
 // Patch the build dir .app (postBuild)
