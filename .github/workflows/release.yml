@@ -1,0 +1,66 @@
+name: Release
+
+# Pushing a tag like v0.0.3 builds the macOS dmg and attaches it to the GitHub
+# release for that tag (creating the release with generated notes if needed).
+# Run manually (Actions -> Release -> Run workflow) to rebuild an existing tag.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and publish (e.g. v0.0.3)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-dmg:
+    runs-on: macos-14 # Apple Silicon, matches the arm64 dmg we ship
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - name: Check tag matches app version
+        working-directory: electrobun-app
+        run: |
+          version=$(bun -e 'console.log(require("./package.json").version)')
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match electrobun-app/package.json version $version"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        working-directory: electrobun-app
+        run: bun install --frozen-lockfile
+
+      - name: Build stable dmg
+        working-directory: electrobun-app
+        run: |
+          bun run scripts/generate-build-info.ts
+          bunx electrobun build --env=stable
+          ls -la artifacts
+
+      - name: Verify the dmg exists
+        working-directory: electrobun-app
+        run: ls artifacts/*.dmg
+
+      - name: Create release if missing and upload dmg
+        working-directory: electrobun-app
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "${TAG#v}" --generate-notes --verify-tag
+          gh release upload "$TAG" artifacts/*.dmg --clobber
